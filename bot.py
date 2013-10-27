@@ -3,6 +3,7 @@
 import requests
 import json
 import os
+import mimetypes
 
 def login(username, password):
     login_info = {'user': username, 'passwd': password, 'api_type':'json'}
@@ -26,9 +27,12 @@ def new_stories(client, subreddit):
     url = "http://www.reddit.com/r/{sr}/new.json".format(sr=subreddit)
     req = client.get(url, params=params)
     res = json.loads(req.text)
-    for story in res['data']['children']:
-        print "{n}: {u}".format(n=story['data']['title'].encode('utf-8'), u=story['data']['url'])
-    return res
+    return res['data']['children']
 
 client = login('GifExploderBot', os.environ['GIFEXPLODERBOT_PASSWORD'])
-new_stories(client, 'MapPorn')
+stories = new_stories(client, 'MapPorn')
+
+for story in stories:
+    mimetype = mimetypes.guess_type(story['data']['url'])[0]
+    if mimetype == "image/gif":
+        print "{n}: {u}".format(n=story['data']['title'].encode('utf-8'), u=story['data']['url'])
