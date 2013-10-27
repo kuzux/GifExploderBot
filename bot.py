@@ -68,6 +68,18 @@ def base64_encode_image(img):
     res = base64.b64encode(sio.getvalue())
     return res
 
+def create_album(client, imgs):
+    req = client.post("https://api.imgur.com/3/album/")
+    res = json.loads(req.content)
+    album_id = res['data']['id']
+    album_dh = res['data']['deletehash']
+
+    for img in imgs:
+        post_data = {"image": base64_encode_image(img), "album": album_dh}
+        req = client.post("https://api.imgur.com/3/image", data=post_data)
+
+    return res
+
 client = reddit_login('GifExploderBot', os.environ['GIFEXPLODERBOT_PASSWORD'])
 imgur_client = imgur_login('9faa2c6310ad5ba')
 stories = new_stories(client, 'MapPorn')
@@ -78,6 +90,4 @@ for story in stories:
         frames = gif_frames(load_image(story['data']['url']))
         if len(frames) > 1:
             print "{n}: {u} {l}".format(n=story['data']['title'].encode('utf-8'), u=story['data']['url'], l=len(frames))
-            for frame in frames:
-                print len(base64_encode_image(frame))
-            break
+            print create_album(imgur_client, frames)
