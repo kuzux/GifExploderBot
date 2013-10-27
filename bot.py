@@ -7,6 +7,23 @@ import mimetypes
 import Image
 import cStringIO
 import base64
+import sqlite3
+
+def connect_to_db():
+    if os.path.exists("gifexploderbot.db"):
+        return sqlite3.connect("gifexploderbot.db")
+    else:
+        return create_db()
+
+def create_db():
+    conn = sqlite3.connect("gifexploderbot.db")
+    f = open('schema.sql')
+    conn.executescript(f.read())
+    f.close()
+    conn.commit()
+    return conn
+
+DB = connect_to_db()
 
 def reddit_login(username, password):
     login_info = {'user': username, 'passwd': password, 'api_type':'json'}
@@ -35,9 +52,25 @@ def imgur_login(app_id):
 
 def new_stories(client, subreddit):
     params = {'limit': 100,}
+    
+    db_res = DB.execute("SELECT last_fetched FROM subreddits WHERE name=?", (subreddit, )).fetchall()
+    if db_res != []:
+        params['before'] = db_res[0][0]
+
     url = "http://www.reddit.com/r/{sr}/new.json".format(sr=subreddit)
     req = client.get(url, params=params)
     res = json.loads(req.text)
+
+    print 
+    last_fetched = res['data']['children'][0]['data']['name']
+
+    if db_res == []:
+        DB.execute("INSERT INTO subreddits (name, last_fetched) VALUES (?,?)", (subreddit, last_fetched))
+        DB.commit()
+    else:
+        DB.execute("UPDATE subreddits SET last_fetched=? WHERE name=?", (last_fetched, subreddit))
+        DB.commit()
+
     return res['data']['children']
 
 def load_image(url):
@@ -82,6 +115,7 @@ def create_album(client, imgs):
 
 client = reddit_login('GifExploderBot', os.environ['GIFEXPLODERBOT_PASSWORD'])
 imgur_client = imgur_login('9faa2c6310ad5ba')
+
 stories = new_stories(client, 'MapPorn')
 
 for story in stories:
@@ -89,5 +123,9 @@ for story in stories:
     if mimetype == "image/gif":
         frames = gif_frames(load_image(story['data']['url']))
         if len(frames) > 1:
-            print "{n}: {u} {l}".format(n=story['data']['title'].encode('utf-8'), u=story['data']['url'], l=len(frames))
-            print create_album(imgur_client, frames)
+            album_info = create_album(imgur_client, frames)
+            DB.execute("INSERT INTO threads (id, album_id, deletehash) VALUES (?,?,?)", (story['data']['id'], album_info['data']['id'], album_info['data']['deletehash']))
+            DB.commit()
+            # break
+            # print story['data']
+            # print "{i} {n}: {u} {l}".format(i=story['data']['id'],n=story['data']['title'].encode('utf-8'), u=story['data']['url'], l=len(frames))
