@@ -16,6 +16,7 @@ def connect_to_db():
         return create_db()
 
 def create_db():
+    print "Creating db"
     conn = sqlite3.connect("gifexploderbot.db")
     f = open('schema.sql')
     conn.executescript(f.read())
@@ -113,6 +114,13 @@ def create_album(client, imgs):
 
     return res
 
+def post_comment(client, parent, url):
+    comment_template = "Here is a link to an album containing the frames of the animated gif: [{url}]({url})"
+    comment = comment_template.format(url="http://www.imgur.com/a/"+url)
+
+    params = {"api_type":"json", "text": comment, "thing_id": parent}
+    client.post("http://www.reddit.com/api/comment", data=params)
+
 client = reddit_login('GifExploderBot', os.environ['GIFEXPLODERBOT_PASSWORD'])
 imgur_client = imgur_login('9faa2c6310ad5ba')
 
@@ -121,11 +129,15 @@ stories = new_stories(client, 'MapPorn')
 for story in stories:
     mimetype = mimetypes.guess_type(story['data']['url'])[0]
     if mimetype == "image/gif":
+        print "Fetching image for " + story['data']['name']
         frames = gif_frames(load_image(story['data']['url']))
         if len(frames) > 1:
+            print "Creating album for " + story['data']['name']
             album_info = create_album(imgur_client, frames)
-            DB.execute("INSERT INTO threads (id, album_id, deletehash) VALUES (?,?,?)", (story['data']['id'], album_info['data']['id'], album_info['data']['deletehash']))
+            DB.execute("INSERT INTO threads (id, album_id, deletehash) VALUES (?,?,?)", (story['data']['name'], album_info['data']['id'], album_info['data']['deletehash']))
             DB.commit()
+            print "Posting comment for " + story['data']['name']
+            post_comment(client, story['data']['name'], album_info['data']['id'])
             # break
             # print story['data']
             # print "{i} {n}: {u} {l}".format(i=story['data']['id'],n=story['data']['title'].encode('utf-8'), u=story['data']['url'], l=len(frames))
