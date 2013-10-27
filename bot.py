@@ -6,8 +6,9 @@ import os
 import mimetypes
 import Image
 import cStringIO
+import base64
 
-def login(username, password):
+def reddit_login(username, password):
     login_info = {'user': username, 'passwd': password, 'api_type':'json'}
     headers = {'user-agent': 'Gif Exploder Bot by /u/kuzux, explodes animated gifs. boom.', }
     client = requests.session()
@@ -24,6 +25,14 @@ def login(username, password):
 
     return client
 
+def imgur_login(app_id):
+    auth_header = 'Client-ID ' + app_id
+    headers = {'Authorization': auth_header}
+    client = requests.session()
+    client.headers = headers
+
+    return client
+
 def new_stories(client, subreddit):
     params = {'limit': 100,}
     url = "http://www.reddit.com/r/{sr}/new.json".format(sr=subreddit)
@@ -34,7 +43,8 @@ def new_stories(client, subreddit):
 def load_image(url):
     req = requests.get(url)
     sio = cStringIO.StringIO(req.content)
-    return Image.open(sio)
+    img = Image.open(sio)
+    return img
 
 def gif_frames(img):
     frames = []
@@ -52,7 +62,14 @@ def gif_frames(img):
         pass
     return frames
 
-client = login('GifExploderBot', os.environ['GIFEXPLODERBOT_PASSWORD'])
+def base64_encode_image(img):
+    sio = cStringIO.StringIO()
+    img.save(sio, 'PNG')
+    res = base64.b64encode(sio.getvalue())
+    return res
+
+client = reddit_login('GifExploderBot', os.environ['GIFEXPLODERBOT_PASSWORD'])
+imgur_client = imgur_login('9faa2c6310ad5ba')
 stories = new_stories(client, 'MapPorn')
 
 for story in stories:
@@ -61,3 +78,6 @@ for story in stories:
         frames = gif_frames(load_image(story['data']['url']))
         if len(frames) > 1:
             print "{n}: {u} {l}".format(n=story['data']['title'].encode('utf-8'), u=story['data']['url'], l=len(frames))
+            for frame in frames:
+                print len(base64_encode_image(frame))
+            break
